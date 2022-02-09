@@ -2,6 +2,7 @@
 from abc import ABC
 from copy import copy
 from typing import Any, Callable, Dict
+from collections import defaultdict
 
 from vnpy.trader.constant import Interval, Direction, Offset
 from vnpy.trader.object import BarData, TickData, OrderData, TradeData
