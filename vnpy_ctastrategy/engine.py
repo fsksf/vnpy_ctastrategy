@@ -333,19 +333,22 @@ class CtaEngine(BaseEngine):
         vt_orderids = []
 
         for req in req_list:
-            vt_orderid = self.main_engine.send_order(req, contract.gateway_name)
-
+            if req.direction in (Direction.BUY_BASKET, Direction.SELL_BASKET):
+                req_l, vt_orderid_l = self.main_engine.send_basket_order(req, contract.gateway_name)
+            else:
+                vt_orderid = self.main_engine.send_order(req, contract.gateway_name)
+                req_l = [req]
+                vt_orderid_l = [vt_orderid[0]]
             # Check if sending order successful
-            if not vt_orderid:
-                continue
+            for rq, vt_o_id in zip(req_l, vt_orderid_l):
+                vt_orderids.append(vt_o_id)
+                if rq is None or vt_o_id is None:
+                    continue
+                self.offset_converter.update_order_request(rq, vt_o_id)
 
-            vt_orderids.append(vt_orderid)
-
-            self.offset_converter.update_order_request(req, vt_orderid)
-
-            # Save relationship between orderid and strategy.
-            self.orderid_strategy_map[vt_orderid] = strategy
-            self.strategy_orderid_map[strategy.strategy_name].add(vt_orderid)
+                # Save relationship between orderid and strategy.
+                self.orderid_strategy_map[vt_o_id] = strategy
+                self.strategy_orderid_map[strategy.strategy_name].add(vt_o_id)
 
         return vt_orderids
 
