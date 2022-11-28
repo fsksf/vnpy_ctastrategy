@@ -344,11 +344,16 @@ class CtaEngine(BaseEngine):
             else:
                 vt_orderid = self.main_engine.send_order(req, contract.gateway_name)
                 req_l = [req]
-                vt_orderid_l = [vt_orderid[0]]
+                if isinstance(vt_orderid, (tuple, list, set)):
+                    vt_orderid_l = vt_orderid
+                else:
+                    vt_orderid_l = [vt_orderid, ]
             # Check if sending order successful
             for rq, vt_o_id in zip(req_l, vt_orderid_l):
+                if not vt_o_id:
+                    continue
                 vt_orderids.append(vt_o_id)
-                if rq is None or vt_o_id is None:
+                if rq is None or vt_o_id is None :
                     continue
                 self.offset_converter.update_order_request(rq, vt_o_id)
 
@@ -665,7 +670,8 @@ class CtaEngine(BaseEngine):
             self.write_log(msg, strategy)
 
     def add_strategy(
-        self, class_name: str, strategy_name: str, vt_symbol: str, setting: dict
+        self, class_name: str, strategy_name: str, vt_symbol: str, setting: dict,
+            trade_basket=False
     ):
         """
         Add a new strategy.
@@ -687,8 +693,10 @@ class CtaEngine(BaseEngine):
         if exchange_str not in Exchange.__members__:
             self.write_log("创建策略失败，本地代码的交易所后缀不正确")
             return
-
-        strategy = strategy_class(self, strategy_name, vt_symbol, setting)
+        try:
+            strategy = strategy_class(self, strategy_name, vt_symbol, setting, trade_basket)
+        except TypeError:
+            strategy = strategy_class(self, strategy_name, vt_symbol, setting)
         self.strategies[strategy_name] = strategy
 
         # Add vt_symbol to strategy map.
@@ -741,6 +749,22 @@ class CtaEngine(BaseEngine):
             self.main_engine.subscribe(req, contract.gateway_name)
         else:
             self.write_log(f"行情订阅失败，找不到合约{strategy.vt_symbol}", strategy)
+
+        if getattr(strategy, 'trade_basket', False):
+            self.write_log(f'订阅 <{strategy.vt_symbol}> 篮子')
+            sub_list = []
+            for comp in self.main_engine.get_basket_components(strategy.vt_symbol):
+                cont = self.main_engine.get_contract(comp.vt_symbol)
+                if not cont:
+                    continue
+                sub_list.append(
+                    SubscribeRequest(symbol=cont.symbol, important=False, exchange=cont.exchange)
+                )
+            try:
+                self.main_engine.subscribe_many(req_list=sub_list, gateway_name=comp.gateway_name)
+            except:
+                for req in sub_list:
+                    self.main_engine.subscribe(req=req, gateway_name=comp.gateway_name)
 
         # Put event to update init completed status.
         strategy.inited = True
@@ -939,7 +963,8 @@ class CtaEngine(BaseEngine):
                 strategy_config["class_name"],
                 strategy_name,
                 strategy_config["vt_symbol"],
-                strategy_config["setting"]
+                strategy_config["setting"],
+                trade_basket=strategy_config.get('trade_basket', False)
             )
 
     def update_strategy_setting(self, strategy_name: str, setting: dict):
@@ -952,6 +977,7 @@ class CtaEngine(BaseEngine):
             "class_name": strategy.__class__.__name__,
             "vt_symbol": strategy.vt_symbol,
             "setting": setting,
+            "trade_basket": getattr(strategy, 'trade_basket', False)
         }
         save_json(self.setting_filename, self.strategy_setting)
 

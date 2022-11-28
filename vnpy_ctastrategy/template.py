@@ -1,8 +1,9 @@
 """"""
+import collections
 from abc import ABC
 from copy import copy
 from typing import Any, Callable, Dict
-from collections import defaultdict
+from cachetools import TTLCache, cachedmethod, cached
 
 from vnpy.trader.constant import Interval, Direction, Offset
 from vnpy.trader.object import BarData, TickData, OrderData, TradeData
@@ -25,6 +26,7 @@ class CtaTemplate(ABC):
         strategy_name: str,
         vt_symbol: str,
         setting: dict,
+        trade_basket=False
     ):
         """"""
         self.cta_engine = cta_engine
@@ -77,7 +79,10 @@ class CtaTemplate(ABC):
         """
         strategy_variables = {}
         for name in self.variables:
-            strategy_variables[name] = getattr(self, name)
+            v = getattr(self, name)
+            if isinstance(v, collections.defaultdict):
+                v = dict(v)
+            strategy_variables[name] = v
         return strategy_variables
 
     def get_data(self):
@@ -365,6 +370,26 @@ class CtaTemplate(ABC):
     def get_spread(self, spread_name):
         return self.cta_engine.main_engine.get_spread(spread_name)
 
+    @cached(cache=TTLCache(maxsize=10, ttl=0.5))
+    def get_pos_factor(self):
+        """
+        获取仓位因子
+        :return: {
+                    'ETF500': {
+                      future: {trade: 1, pos: 1, algo: 1, tm: 1668410241},
+                      etf: {trade: 0, pos: 1,  algo: 2, tm: 1668410241},
+                      basket: {trade: 0, pos: 1, algo: 3, tm: 1668410241}
+                    },
+                    'ETF1000': {
+                      future: {trade: 0, pos: 5, algo: 5, tm: 1668410241},
+                      etf: {trade: 0, pos: 5, algo: 6, tm: 1668410241},
+                      basket: {trade: 0, pos: 5, algo: 7, tm: 1668410241}
+                    }
+                }
+        """
+        data = self.cta_engine.main_engine.get_from_url(url='http://49.232.4.24:8090/signal/factor/pos')
+        return data['data']
+
 
 class CtaSignal(ABC):
     """"""
@@ -457,14 +482,12 @@ class TargetPosTemplate(CtaTemplate):
         if self.trading:
             self.trade()
 
-    @virtual
     def on_bar(self, bar: BarData):
         """
         Callback of new bar data update.
         """
         self.last_bar = bar
 
-    @virtual
     def on_order(self, order: OrderData):
         """
         Callback of new order data update.

@@ -176,6 +176,7 @@ class RolloverTool(QtWidgets.QDialog):
         pos = strategy.pos
         name = strategy.strategy_name
         parameters = strategy.get_parameters()
+        trade
 
         # Remove old strategy
         result = self.cta_engine.remove_strategy(name)
