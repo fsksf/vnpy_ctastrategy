@@ -25,11 +25,18 @@ class ETFTemplate(CtaTemplate):
         strategy_name: str,
         vt_symbol: str,         # 篮子对应的ETF
         setting: dict,
+        trade_basket: bool = False
     ):
         """"""
+        super(ETFTemplate, self).__init__(cta_engine,
+                                          strategy_name,
+                                          vt_symbol,  # 篮子对应的ETF
+                                          setting,
+                                          trade_basket)
         self.cta_engine = cta_engine
         self.strategy_name = strategy_name
         self.vt_symbol = vt_symbol
+        self.trade_basket = trade_basket
 
         self.inited = False
         self.trading = False
@@ -38,6 +45,7 @@ class ETFTemplate(CtaTemplate):
         self.require_basket_pos = {}  # 篮子成分股每个股票还需要买多少
         self.basket_pos = 0 # 篮子包数量（成分股折算）
         self.etf_pos = 0 # etf的数量
+        self.per_order_vol = 100000             # 每次下单最多多少，分批下单，减少冲击
 
         self.variables = copy(self.variables)
         self.variables.insert(0, "inited")
@@ -72,6 +80,8 @@ class ETFTemplate(CtaTemplate):
                 continue
             elif cash_flag == 1:
                 tick = self.cta_engine.main_engine.get_tick(comp.vt_symbol)
+                if tick is None:
+                    continue
                 if tick and tick.last_price == tick.limit_up or tick.last_price == tick.limit_down:
                     self.write_log(f'{tick.vt_symbol} 涨停或者跌停，up: {tick.limit_up}, down {tick.limit_down} '
                                    f'last price {tick.last_price}')
@@ -89,6 +99,44 @@ class ETFTemplate(CtaTemplate):
                 self.require_basket_pos[comp.vt_symbol] = comp_require_pos
         self.basket_pos = basket_pos
         self.etf_pos = self.pos[self.vt_symbol]
+
+
+    def buy_sell_with_target(
+        self,
+        limit_price: float,
+        target_volume: float,
+        per_order_max: float,
+        signal_price: float = None,
+        stop: bool = False,
+        lock: bool = False,
+        net: bool = False
+    ):
+        """
+        根据目标仓位和每批次下单量下单
+        :param target_volume: 目标仓位
+        :param per_order_max: 分批下单本次最多的数量
+        :return:
+        """
+        vol_gap = target_volume - self.etf_pos          # 仓位缺口
+        this_vol = min(abs(vol_gap), per_order_max)
+        if vol_gap > 0:
+            self.buy(
+                limit_price=limit_price,
+                volume=this_vol,
+                signal_price=signal_price,
+                stop=stop,
+                lock=lock,
+                net=net
+            )
+        elif vol_gap < 0:
+            self.sell(
+                limit_price=limit_price,
+                volume=this_vol,
+                signal_price=signal_price,
+                stop=stop,
+                lock=lock,
+                net=net
+            )
 
     def purchase(self, volume):
         """
@@ -125,7 +173,7 @@ class ETFTemplate(CtaTemplate):
                     net=False,
                     signal_price=None,
                     vt_symbol=k,
-                    type=OrderType.JG_TDC_PRICETYPE_BestOrLimit)
+                    type=OrderType.BestOrLimit)
             elif v < 0:
                 self.cta_engine.send_order(
                     strategy=self,
@@ -138,4 +186,12 @@ class ETFTemplate(CtaTemplate):
                     net=False,
                     signal_price=None,
                     vt_symbol=k,
-                    type=OrderType.JG_TDC_PRICETYPE_BestOrLimit)
+                    type=OrderType.BestOrLimit)
+
+    def get_data(self):
+        """
+        Get strategy data.
+        """
+        data = super().get_data()
+        data['trade_basket'] = self.trade_basket
+        return data

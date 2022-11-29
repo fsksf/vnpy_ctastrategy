@@ -149,9 +149,10 @@ class CtaManager(QtWidgets.QWidget):
             setting = editor.get_setting()
             vt_symbol = setting.pop("vt_symbol")
             strategy_name = setting.pop("strategy_name")
+            trade_basket = setting.pop("trade_basket")
 
             self.cta_engine.add_strategy(
-                class_name, strategy_name, vt_symbol, setting
+                class_name, strategy_name, vt_symbol, setting, trade_basket=trade_basket
             )
 
     def clear_log(self):
@@ -412,7 +413,8 @@ class SettingEditor(QtWidgets.QDialog):
     """
 
     def __init__(
-        self, parameters: dict, strategy_name: str = "", class_name: str = ""
+        self, parameters: dict, strategy_name: str = "", class_name: str = "",
+            trade_basket: bool = False
     ):
         """"""
         super(SettingEditor, self).__init__()
@@ -420,6 +422,7 @@ class SettingEditor(QtWidgets.QDialog):
         self.parameters = parameters
         self.strategy_name = strategy_name
         self.class_name = class_name
+        self.trade_basket = trade_basket
 
         self.edits = {}
 
@@ -433,7 +436,7 @@ class SettingEditor(QtWidgets.QDialog):
         if self.class_name:
             self.setWindowTitle(f"添加策略：{self.class_name}")
             button_text = "添加"
-            parameters = {"strategy_name": "", "vt_symbol": ""}
+            parameters = {"strategy_name": "", "vt_symbol": "", "trade_basket": False}
             parameters.update(self.parameters)
         else:
             self.setWindowTitle(f"参数编辑：{self.strategy_name}")
