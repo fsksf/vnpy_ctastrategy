@@ -277,6 +277,69 @@ class CtaTemplate(ABC):
         else:
             return []
 
+    def LoanBuy(self, limit_price, volume):
+        """融资买入"""
+        self.send_order(
+            direction=Direction.LoanBuy,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price
+        )
+
+    def LoanSell(self, limit_price, volume):
+        """融券卖出"""
+        self.send_order(
+            direction=Direction.LoanSell,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price
+        )
+
+    def preBookLoanSell(self, limit_price, volume):
+        """专项融券卖出"""
+        self.send_order(
+            direction=Direction.PreBookLoanSell,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price
+        )
+
+    def enBuyBack(self, limit_price, volume):
+        """买券还券"""
+        self.send_order(
+            direction=Direction.EnBuyBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=limit_price
+        )
+
+    def enSellBack(self, limit_price, volume):
+        """卖券还款"""
+        self.send_order(
+            direction=Direction.EnSellBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=limit_price
+        )
+
+    def payBack(self, volume):
+        """直接还款"""
+        self.send_order(
+            direction=Direction.PayBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=0
+        )
+
+    def stockBack(self, volume):
+        """直接还券"""
+        self.send_order(
+            direction=Direction.StockBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=0
+        )
+
     def cancel_order(self, vt_orderid: str):
         """
         Cancel an existing order.

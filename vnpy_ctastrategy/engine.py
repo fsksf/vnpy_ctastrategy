@@ -216,15 +216,21 @@ class CtaEngine(BaseEngine):
 
         # Update strategy pos before calling on_trade method
         if isinstance(strategy.pos, dict):
-            if trade.direction == Direction.LONG:
+            if trade.direction in (Direction.LONG, Direction.LoanBuy, Direction.EnBuyBack):
                 strategy.pos[trade.vt_symbol] = strategy.pos[trade.vt_symbol] + trade.volume
-            else:
+            elif trade.direction in (Direction.SHORT, Direction.LoanSell, Direction.PreBookLoanSell,
+                                     Direction.EnSellBack):
                 strategy.pos[trade.vt_symbol] = strategy.pos[trade.vt_symbol] - trade.volume
-        else:
-            if trade.direction == Direction.LONG:
-                strategy.pos += trade.volume
             else:
+                raise NotImplementedError()
+        else:
+            if trade.direction in (Direction.LONG, Direction.LoanBuy, Direction.EnBuyBack):
+                strategy.pos += trade.volume
+            elif trade.direction in (Direction.SHORT, Direction.LoanSell, Direction.PreBookLoanSell,
+                                     Direction.EnSellBack):
                 strategy.pos -= trade.volume
+            else:
+                raise NotImplementedError()
 
         self.call_strategy_func(strategy, strategy.on_trade, trade)
 
