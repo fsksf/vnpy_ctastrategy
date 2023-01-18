@@ -8,6 +8,7 @@ from cachetools import TTLCache, cachedmethod, cached
 from vnpy.trader.constant import Interval, Direction, Offset
 from vnpy.trader.object import BarData, TickData, OrderData, TradeData
 from vnpy.trader.utility import virtual
+from vnpy.trader.utils import get_from_url
 
 
 from .base import StopOrder, EngineType
@@ -433,8 +434,9 @@ class CtaTemplate(ABC):
     def get_spread(self, spread_name):
         return self.cta_engine.main_engine.get_spread(spread_name)
 
+    @staticmethod
     @cached(cache=TTLCache(maxsize=10, ttl=0.5))
-    def _get_pos_factor(self):
+    def _get_pos_factor():
         """
         获取仓位因子
         :return: {
@@ -470,10 +472,11 @@ class CtaTemplate(ABC):
             }
         }
         """
-        data = self.cta_engine.main_engine.get_from_url(url='http://49.232.4.24:8090/signal/factor/pos')
+        data = get_from_url(url='http://49.232.4.24:8090/signal/factor/pos')
         return data['data']
 
-    def get_pos_factor(self):
+    @classmethod
+    def get_pos_factor(cls):
         """
 
         :return: {
@@ -489,12 +492,28 @@ class CtaTemplate(ABC):
                 }
             }
         """
-        return self._get_pos_factor()['posFactors']
+        return cls._get_pos_factor()['posFactors']
 
-    def get_spread_pos_factor(self):
+    @classmethod
+    def get_spread_pos_factor(cls):
         """
 
         :return:  {
+                'IH-512100': {
+                    "trade": 0,
+                    "legA": {
+                        "symbol": "IH",
+                        "targetPos": 1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    },
+                    "legB": {
+                        "symbol": "512100",
+                        "targetPos": -1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    }
+                },
                 'IH-512101': {
                     "trade": 0,
                     "legA": {
@@ -512,7 +531,7 @@ class CtaTemplate(ABC):
                 }
             }
         """
-        return self._get_pos_factor()['spreadPosFactors']
+        return cls._get_pos_factor()['spreadPosFactors']
 
 
 class CtaSignal(ABC):
