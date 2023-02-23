@@ -4,9 +4,10 @@ from abc import ABC
 from copy import copy
 from typing import Any, Callable, Dict
 from cachetools import TTLCache, cachedmethod, cached
+from vnpy import WORK_DIR
 from vnpy.trader.setting import SETTINGS
 from vnpy.trader.constant import Interval, Direction, Offset
-from vnpy.trader.object import BarData, TickData, OrderData, TradeData
+from vnpy.trader.object import BarData, TickData, OrderData, TradeData, ReportStrategy
 from vnpy.trader.utility import virtual
 from vnpy.trader.utils import get_from_url
 
@@ -560,6 +561,18 @@ class CtaTemplate(ABC):
             }
         """
         return cls._get_pos_factor()['spreadPosFactors']
+
+    def get_report_data(self):
+        return ReportStrategy(
+            name=self.strategy_name,
+            strategy_type='CTA',
+            trading=self.trading,
+            symbols=[self.vt_symbol, ],
+            positions={self.vt_symbol: self.pos},
+            targets={},
+            statue='success',
+            client=WORK_DIR,
+        ).__dict__
 
 
 class CtaSignal(ABC):

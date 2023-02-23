@@ -1017,14 +1017,17 @@ class CtaEngine(BaseEngine):
         data = strategy.get_data()
         event = Event(EVENT_CTA_STRATEGY, data)
         self.event_engine.put(event)
+
+        if not SETTINGS["signal.report"]:
+            return
+
         if isinstance(strategy, CtaSpreadTemplate):
 
-            data = {'strategyData': strategy.get_report_data()}
+            data = {'strategyData': [strategy.get_report_data()]}
             self.send_hedging_report(data)
 
     @staticmethod
     def send_hedging_report(data):
-        print(data)
         try:
             requests.post(f'http://{SETTINGS["signal.host"]}/api/signal/hedging_board',
                           data=json.dumps(data), timeout=3)

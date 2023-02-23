@@ -4,11 +4,12 @@
 @Author  : fsksf
 @File    : spread_template.py
 """
+import datetime
 from collections import defaultdict
 
 from typing import Any, Dict
 from vnpy import WORK_DIR
-from vnpy.trader.object import TickData
+from vnpy.trader.object import TickData, ReportStrategy
 from vnpy_ctastrategy.template import CtaTemplate
 
 
@@ -78,20 +79,17 @@ class CtaSpreadTemplate(CtaTemplate):
     def get_report_data(self):
         pos_a = self.pos[self.leg_a]
         pos_b = self.pos[self.leg_b]
-        return {
-            'name': self.strategy_name,
-            'running': self.trading,
-            'legA': self.leg_a,
-            'legB': self.leg_b,
-            'posA': pos_a,
-            'posB': pos_b,
-            'multA': self.leg_a_mult,
-            'multB': self.leg_b_mult,
-            'targetA': self.target_pos['leg_a'],
-            'targetB': self.target_pos['leg_b'],
-            'statue':
+        return ReportStrategy(
+            name=self.strategy_name,
+            strategy_type='CTA价差',
+            trading=self.trading,
+            symbols={'A': self.leg_a, 'B': self.leg_b},
+            positions=self.pos,
+            targets=self.target_pos,
+            statue=
                 'warning'
                 if pos_a / self.leg_a_mult + pos_b / self.leg_b_mult != 0
                 else 'success',
-            'client': WORK_DIR
-        }
+            other_info={'A': self.leg_a_mult, 'B': self.leg_b_mult},
+            client=WORK_DIR
+        ).__dict__
