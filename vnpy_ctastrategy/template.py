@@ -4,10 +4,12 @@ from abc import ABC
 from copy import copy
 from typing import Any, Callable, Dict
 from cachetools import TTLCache, cachedmethod, cached
-
+from vnpy import WORK_DIR
+from vnpy.trader.setting import SETTINGS
 from vnpy.trader.constant import Interval, Direction, Offset
-from vnpy.trader.object import BarData, TickData, OrderData, TradeData
+from vnpy.trader.object import BarData, TickData, OrderData, TradeData, ReportStrategy
 from vnpy.trader.utility import virtual
+from vnpy.trader.utils import get_from_url
 
 
 from .base import StopOrder, EngineType
@@ -45,6 +47,7 @@ class CtaTemplate(ABC):
         self.variables.insert(2, "pos")
 
         self.update_setting(setting)
+        self.active_orderids = set()
 
     def update_setting(self, setting: dict):
         """
@@ -53,6 +56,9 @@ class CtaTemplate(ABC):
         for name in self.parameters:
             if name in setting:
                 setattr(self, name, setting[name])
+
+    def get_symbols(self):
+        return [self.vt_symbol, ]
 
     @classmethod
     def get_class_parameters(cls):
@@ -141,12 +147,18 @@ class CtaTemplate(ABC):
         """
         pass
 
-    @virtual
     def on_order(self, order: OrderData):
         """
         Callback of new order data update.
         """
-        pass
+        vt_orderid = order.vt_orderid
+
+        if not order.is_active():
+            if vt_orderid in self.active_orderids:
+                self.active_orderids.remove(vt_orderid)
+
+    def all_order_finished(self):
+        return len(self.active_orderids) == 0
 
     @virtual
     def on_stop_order(self, stop_order: StopOrder):
@@ -162,7 +174,8 @@ class CtaTemplate(ABC):
         signal_price: float = None,
         stop: bool = False,
         lock: bool = False,
-        net: bool = False
+        net: bool = False,
+        vt_symbol: str = None
     ):
         """
         Send buy order to open a long position.
@@ -175,7 +188,8 @@ class CtaTemplate(ABC):
             signal_price=signal_price,
             stop=stop,
             lock=lock,
-            net=net
+            net=net,
+            vt_symbol=vt_symbol
         )
 
     def sell(
@@ -185,7 +199,8 @@ class CtaTemplate(ABC):
         signal_price: float = None,
         stop: bool = False,
         lock: bool = False,
-        net: bool = False
+        net: bool = False,
+        vt_symbol: str = None
     ):
         """
         Send sell order to close a long position.
@@ -198,7 +213,8 @@ class CtaTemplate(ABC):
             signal_price=signal_price,
             stop=stop,
             lock=lock,
-            net=net
+            net=net,
+            vt_symbol=vt_symbol
         )
 
     def short(
@@ -208,7 +224,8 @@ class CtaTemplate(ABC):
         signal_price: float = None,
         stop: bool = False,
         lock: bool = False,
-        net: bool = False
+        net: bool = False,
+        vt_symbol: str = None
     ):
         """
         Send short order to open as short position.
@@ -221,7 +238,8 @@ class CtaTemplate(ABC):
             signal_price=signal_price,
             stop=stop,
             lock=lock,
-            net=net
+            net=net,
+            vt_symbol=vt_symbol
         )
 
     def cover(
@@ -231,7 +249,8 @@ class CtaTemplate(ABC):
         signal_price: float = None,
         stop: bool = False,
         lock: bool = False,
-        net: bool = False
+        net: bool = False,
+        vt_symbol: str = None
     ):
         """
         Send cover order to close a short position.
@@ -244,7 +263,8 @@ class CtaTemplate(ABC):
             signal_price=signal_price,
             stop=stop,
             lock=lock,
-            net=net
+            net=net,
+            vt_symbol=vt_symbol
         )
 
     def send_order(
@@ -256,7 +276,8 @@ class CtaTemplate(ABC):
         signal_price: float = None,
         stop: bool = False,
         lock: bool = False,
-        net: bool = False
+        net: bool = False,
+        vt_symbol: str = None
     ):
         """
         Send a new order.
@@ -272,10 +293,82 @@ class CtaTemplate(ABC):
                                                      stop=stop,
                                                      lock=lock,
                                                      net=net,
-                                                     signal_price=signal_price)
+                                                     signal_price=signal_price,
+                                                     vt_symbol=vt_symbol)
+            self.active_orderids.update(vt_orderids)
             return vt_orderids
         else:
             return []
+
+    def LoanBuy(self, limit_price, volume, vt_symbol: str = None):
+        """融资买入"""
+        self.send_order(
+            direction=Direction.LoanBuy,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price,
+            vt_symbol=vt_symbol
+        )
+
+    def LoanSell(self, limit_price, volume, vt_symbol: str = None):
+        """融券卖出"""
+        self.send_order(
+            direction=Direction.LoanSell,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price,
+            vt_symbol=vt_symbol
+        )
+
+    def preBookLoanSell(self, limit_price, volume, vt_symbol: str = None):
+        """专项融券卖出"""
+        self.send_order(
+            direction=Direction.PreBookLoanSell,
+            offset=Offset.OPEN,
+            volume=volume,
+            price=limit_price,
+            vt_symbol=vt_symbol
+        )
+
+    def enBuyBack(self, limit_price, volume, vt_symbol: str = None):
+        """买券还券"""
+        self.send_order(
+            direction=Direction.EnBuyBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=limit_price,
+            vt_symbol=vt_symbol
+        )
+
+    def enSellBack(self, limit_price, volume, vt_symbol: str = None):
+        """卖券还款"""
+        self.send_order(
+            direction=Direction.EnSellBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=limit_price,
+            vt_symbol=vt_symbol
+        )
+
+    def payBack(self, volume, vt_symbol: str = None):
+        """直接还款"""
+        self.send_order(
+            direction=Direction.PayBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=0,
+            vt_symbol=vt_symbol
+        )
+
+    def stockBack(self, volume, vt_symbol: str = None):
+        """直接还券"""
+        self.send_order(
+            direction=Direction.StockBack,
+            offset=Offset.CLOSE,
+            volume=volume,
+            price=0,
+            vt_symbol=vt_symbol
+        )
 
     def cancel_order(self, vt_orderid: str):
         """
@@ -370,25 +463,116 @@ class CtaTemplate(ABC):
     def get_spread(self, spread_name):
         return self.cta_engine.main_engine.get_spread(spread_name)
 
+    @staticmethod
     @cached(cache=TTLCache(maxsize=10, ttl=0.5))
-    def get_pos_factor(self):
+    def _get_pos_factor():
         """
         获取仓位因子
         :return: {
-                    'ETF500': {
-                      future: {trade: 1, pos: 1, algo: 1, tm: 1668410241},
-                      etf: {trade: 0, pos: 1,  algo: 2, tm: 1668410241},
-                      basket: {trade: 0, pos: 1, algo: 3, tm: 1668410241}
+            'spreadPosFactors': {
+                'IH-512101': {
+                    "trade": 0,
+                    "legA": {
+                        "symbol": "IH",
+                        "targetPos": 1,
+                        "algo": 1,
+                        "tm": 1673837479.781
                     },
-                    'ETF1000': {
-                      future: {trade: 0, pos: 5, algo: 5, tm: 1668410241},
-                      etf: {trade: 0, pos: 5, algo: 6, tm: 1668410241},
-                      basket: {trade: 0, pos: 5, algo: 7, tm: 1668410241}
+                    "legB": {
+                        "symbol": "512101",
+                        "targetPos": -1,
+                        "algo": 1,
+                        "tm": 1673837479.781
                     }
                 }
+            },
+
+            'posFactors': {
+                'ETF500': {
+                  future: {trade: 1, pos: 1, algo: 1, tm: 1668410241},
+                  etf: {trade: 0, pos: 1,  algo: 2, tm: 1668410241},
+                  basket: {trade: 0, pos: 1, algo: 3, tm: 1668410241}
+                },
+                'ETF1000': {
+                  future: {trade: 0, pos: 5, algo: 5, tm: 1668410241},
+                  etf: {trade: 0, pos: 5, algo: 6, tm: 1668410241},
+                  basket: {trade: 0, pos: 5, algo: 7, tm: 1668410241}
+                }
+            }
+        }
         """
-        data = self.cta_engine.main_engine.get_from_url(url='http://49.232.4.24:8090/signal/factor/pos')
+        data = get_from_url(url=f'http://{SETTINGS["signal.host"]}/signal/factor/pos')
         return data['data']
+
+    @classmethod
+    def get_pos_factor(cls):
+        """
+
+        :return: {
+                'ETF500': {
+                  future: {trade: 1, pos: 1, algo: 1, tm: 1668410241},
+                  etf: {trade: 0, pos: 1,  algo: 2, tm: 1668410241},
+                  basket: {trade: 0, pos: 1, algo: 3, tm: 1668410241}
+                },
+                'ETF1000': {
+                  future: {trade: 0, pos: 5, algo: 5, tm: 1668410241},
+                  etf: {trade: 0, pos: 5, algo: 6, tm: 1668410241},
+                  basket: {trade: 0, pos: 5, algo: 7, tm: 1668410241}
+                }
+            }
+        """
+        return cls._get_pos_factor()['posFactors']
+
+    @classmethod
+    def get_spread_pos_factor(cls):
+        """
+
+        :return:  {
+                'IH-512100': {
+                    "trade": 0,
+                    "legA": {
+                        "symbol": "IH",
+                        "targetPos": 1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    },
+                    "legB": {
+                        "symbol": "512100",
+                        "targetPos": -1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    }
+                },
+                'IH-512101': {
+                    "trade": 0,
+                    "legA": {
+                        "symbol": "IH",
+                        "targetPos": 1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    },
+                    "legB": {
+                        "symbol": "512101",
+                        "targetPos": -1,
+                        "algo": 1,
+                        "tm": 1673837479.781
+                    }
+                }
+            }
+        """
+        return cls._get_pos_factor()['spreadPosFactors']
+
+    def get_report_data(self):
+        return ReportStrategy(
+            name=self.strategy_name,
+            strategy_type='CTA',
+            trading=self.trading,
+            symbols=[self.vt_symbol, ],
+            positions={self.vt_symbol: self.pos},
+            targets={},
+            statue='success',
+            client=WORK_DIR,
+        ).__dict__
 
 
 class CtaSignal(ABC):

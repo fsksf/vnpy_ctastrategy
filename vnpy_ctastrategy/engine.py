@@ -1,6 +1,7 @@
 """"""
 
 import importlib
+import json
 import traceback
 from collections import defaultdict
 from pathlib import Path
@@ -8,9 +9,11 @@ from typing import Any, Callable
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
+
+import requests
 from tzlocal import get_localzone
 from glob import glob
-
+from vnpy.trader.setting import SETTINGS
 from vnpy.event import Event, EventEngine
 from vnpy.trader.engine import BaseEngine, MainEngine
 from vnpy.trader.object import (
@@ -52,6 +55,7 @@ from .base import (
     STOPORDER_PREFIX
 )
 from .template import CtaTemplate
+from .spread_template import CtaSpreadTemplate
 
 
 STOP_STATUS_MAP = {
@@ -216,15 +220,21 @@ class CtaEngine(BaseEngine):
 
         # Update strategy pos before calling on_trade method
         if isinstance(strategy.pos, dict):
-            if trade.direction == Direction.LONG:
+            if trade.direction in (Direction.LONG, Direction.LoanBuy, Direction.EnBuyBack):
                 strategy.pos[trade.vt_symbol] = strategy.pos[trade.vt_symbol] + trade.volume
-            else:
+            elif trade.direction in (Direction.SHORT, Direction.LoanSell, Direction.PreBookLoanSell,
+                                     Direction.EnSellBack):
                 strategy.pos[trade.vt_symbol] = strategy.pos[trade.vt_symbol] - trade.volume
-        else:
-            if trade.direction == Direction.LONG:
-                strategy.pos += trade.volume
             else:
+                raise NotImplementedError()
+        else:
+            if trade.direction in (Direction.LONG, Direction.LoanBuy, Direction.EnBuyBack):
+                strategy.pos += trade.volume
+            elif trade.direction in (Direction.SHORT, Direction.LoanSell, Direction.PreBookLoanSell,
+                                     Direction.EnSellBack):
                 strategy.pos -= trade.volume
+            else:
+                raise NotImplementedError()
 
         self.call_strategy_func(strategy, strategy.on_trade, trade)
 
@@ -689,10 +699,10 @@ class CtaEngine(BaseEngine):
             self.write_log("创建策略失败，本地代码缺失交易所后缀")
             return
 
-        _, exchange_str = vt_symbol.split(".")
-        if exchange_str not in Exchange.__members__:
-            self.write_log("创建策略失败，本地代码的交易所后缀不正确")
-            return
+        # _, exchange_str = vt_symbol.split(".")
+        # if exchange_str not in Exchange.__members__:
+        #     self.write_log("创建策略失败，本地代码的交易所后缀不正确")
+        #     return
         try:
             strategy = strategy_class(self, strategy_name, vt_symbol, setting, trade_basket)
         except TypeError:
@@ -700,8 +710,9 @@ class CtaEngine(BaseEngine):
         self.strategies[strategy_name] = strategy
 
         # Add vt_symbol to strategy map.
-        strategies = self.symbol_strategy_map[vt_symbol]
-        strategies.append(strategy)
+        for symbol in strategy.get_symbols():
+            strategies = self.symbol_strategy_map[symbol]
+            strategies.append(strategy)
 
         # Update to setting file.
         self.update_strategy_setting(strategy_name, setting)
@@ -742,13 +753,14 @@ class CtaEngine(BaseEngine):
                     setattr(strategy, name, value)
 
         # Subscribe market data
-        contract = self.main_engine.get_contract(strategy.vt_symbol)
-        if contract:
-            req = SubscribeRequest(
-                symbol=contract.symbol, exchange=contract.exchange)
-            self.main_engine.subscribe(req, contract.gateway_name)
-        else:
-            self.write_log(f"行情订阅失败，找不到合约{strategy.vt_symbol}", strategy)
+        for vt_symbol in strategy.get_symbols():
+            contract = self.main_engine.get_contract(vt_symbol)
+            if contract:
+                req = SubscribeRequest(
+                    symbol=contract.symbol, exchange=contract.exchange)
+                self.main_engine.subscribe(req, contract.gateway_name)
+            else:
+                self.write_log(f"行情订阅失败，找不到合约{vt_symbol}", strategy)
 
         if getattr(strategy, 'trade_basket', False):
             self.write_log(f'订阅 <{strategy.vt_symbol}> 篮子')
@@ -1005,6 +1017,22 @@ class CtaEngine(BaseEngine):
         data = strategy.get_data()
         event = Event(EVENT_CTA_STRATEGY, data)
         self.event_engine.put(event)
+
+        if not SETTINGS["signal.report"]:
+            return
+
+        if isinstance(strategy, CtaSpreadTemplate):
+
+            data = {'strategyData': [strategy.get_report_data()]}
+            self.send_hedging_report(data)
+
+    @staticmethod
+    def send_hedging_report(data):
+        try:
+            requests.post(f'http://{SETTINGS["signal.host"]}/api/signal/hedging_board',
+                          data=json.dumps(data), timeout=3)
+        except Exception:
+            pass
 
     def write_log(self, msg: str, strategy: CtaTemplate = None):
         """
