@@ -1021,10 +1021,11 @@ class CtaEngine(BaseEngine):
         if not SETTINGS["signal.report"]:
             return
 
-        if isinstance(strategy, CtaSpreadTemplate):
-
+        try:
             data = {'strategyData': [strategy.get_report_data()]}
             self.send_hedging_report(data)
+        except Exception as e:
+            pass
 
     @staticmethod
     def send_hedging_report(data):

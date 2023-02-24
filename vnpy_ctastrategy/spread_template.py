@@ -64,7 +64,6 @@ class CtaSpreadTemplate(CtaTemplate):
         leg_b_lack = target_b - self.pos[self.leg_b] / self.leg_b_mult
         if leg_b_lack == leg_a_lack == 0:
             return
-        print(leg_a_lack, leg_b_lack, self.leg_a_mult, self.leg_b_mult)
         self.handle_tick(leg_a_lack, leg_b_lack)
 
     def handle_tick(self, leg_a_lack, leg_b_lack):
