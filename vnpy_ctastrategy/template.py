@@ -463,9 +463,8 @@ class CtaTemplate(ABC):
     def get_spread(self, spread_name):
         return self.cta_engine.main_engine.get_spread(spread_name)
 
-    @staticmethod
     @cached(cache=TTLCache(maxsize=10, ttl=0.5))
-    def _get_pos_factor():
+    def _get_pos_factor(self):
         """
         获取仓位因子
         :return: {
@@ -501,11 +500,18 @@ class CtaTemplate(ABC):
             }
         }
         """
-        data = get_from_url(url=f'http://{SETTINGS["signal.host"]}/signal/factor/pos')
+        url = f'http://{SETTINGS["signal.host"]}/api/signal/factor/pos'
+        try:
+            data = get_from_url(url=url,
+                                headers={'Api-Token': SETTINGS['signal.token']})
+        except:
+            self.write_log(f'无法链接到 {url}')
+            return
+        if data is None:
+            return None
         return data['data']
 
-    @classmethod
-    def get_pos_factor(cls):
+    def get_pos_factor(self):
         """
 
         :return: {
@@ -521,13 +527,15 @@ class CtaTemplate(ABC):
                 }
             }
         """
-        return cls._get_pos_factor()['posFactors']
+        data = self._get_pos_factor()
+        if data is None:
+            return {}
+        return data.get('posFactors')
 
-    @classmethod
-    def get_spread_pos_factor(cls):
+    def get_spread_pos_factor(self):
         """
 
-        :return:  {
+        :return: {
                 'IH-512100': {
                     "trade": 0,
                     "legA": {
@@ -560,15 +568,18 @@ class CtaTemplate(ABC):
                 }
             }
         """
-        return cls._get_pos_factor()['spreadPosFactors']
+        data = self._get_pos_factor()
+        if data is None:
+            return {}
+        return data.get('spreadPosFactors')
 
     def get_report_data(self):
         return ReportStrategy(
             name=self.strategy_name,
             strategy_type='CTA',
             trading=self.trading,
-            symbols=[self.vt_symbol, ],
-            positions={self.vt_symbol: self.pos},
+            symbols={'A': self.vt_symbol},
+            positions=self.pos,
             targets={},
             statue='success',
             client=WORK_DIR,

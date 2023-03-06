@@ -57,14 +57,22 @@ class CtaSpreadTemplate(CtaTemplate):
     def on_tick(self, tick: TickData):
         self.ticks[tick.vt_symbol] = tick
         data = self.get_spread_pos_factor()
-        spread_pos_data = data[self.spread_pos_name]
-        self.target_pos['leg_a'] = target_a = spread_pos_data['legA']['targetPos']
-        self.target_pos['leg_b'] = target_b = spread_pos_data['legB']['targetPos']
+        if data is None:
+            return
+        spread_pos_data = data.get(self.spread_pos_name)
+        if spread_pos_data is None:
+            self.write_log(f'[{self.spread_pos_name}] 仓位因子不存在')
+            return
+        target_a = spread_pos_data['legA']['targetPos']
+        target_b = spread_pos_data['legB']['targetPos']
+        if self.target_pos['leg_a'] != target_a or self.target_pos['leg_b'] != target_b:
+            self.target_pos['leg_a'] = target_a
+            self.target_pos['leg_b'] = target_b
+            self.put_event()
         leg_a_lack = target_a - self.pos[self.leg_a] / self.leg_a_mult
         leg_b_lack = target_b - self.pos[self.leg_b] / self.leg_b_mult
         if leg_b_lack == leg_a_lack == 0:
             return
-        print(leg_a_lack, leg_b_lack, self.leg_a_mult, self.leg_b_mult)
         self.handle_tick(leg_a_lack, leg_b_lack)
 
     def handle_tick(self, leg_a_lack, leg_b_lack):

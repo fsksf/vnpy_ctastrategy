@@ -28,15 +28,16 @@ class CtaSpreadStrategy1(CtaSpreadTemplate):
                      volume=leg_a_lack * self.leg_a_mult, lock=True)
         if leg_b_lack > 0 and tick_b:
             new_order = True
-            self.buy(vt_symbol=self.leg_b, limit_price=tick_b.last_price,
-                     volume=leg_b_lack * self.leg_b_mult, lock=True)
+            self.LoanBuy(vt_symbol=self.leg_b, limit_price=tick_b.last_price,
+                         volume=leg_b_lack * self.leg_b_mult)
         if leg_a_lack < 0 and tick_a:
             new_order = True
             self.sell(vt_symbol=self.leg_a, limit_price=tick_a.last_price,
                       volume=abs(leg_a_lack) * self.leg_a_mult, lock=True)
         if leg_b_lack < 0 and tick_b:
             new_order = True
-            self.sell(vt_symbol=self.leg_b, limit_price=tick_b.last_price,
-                      volume=abs(leg_b_lack) * self.leg_b_mult, lock=True)
+            self.preBookLoanSell(
+                vt_symbol=self.leg_b, limit_price=tick_b.last_price,
+                volume=abs(leg_b_lack) * self.leg_b_mult)
         if new_order:
             self.last_order_time = time.time()
