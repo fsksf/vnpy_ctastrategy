@@ -1021,19 +1021,8 @@ class CtaEngine(BaseEngine):
         if not SETTINGS["signal.report"]:
             return
 
-        try:
-            data = {'strategyData': [strategy.get_report_data()]}
-            self.send_hedging_report(data)
-        except Exception as e:
-            pass
-
-    @staticmethod
-    def send_hedging_report(data):
-        try:
-            requests.post(f'http://{SETTINGS["signal.host"]}/api/signal/hedging_board',
-                          data=json.dumps(data), timeout=3)
-        except Exception:
-            pass
+        data = {'strategyData': [strategy.get_report_data()]}
+        self.main_engine.send_hedging_report(data)
 
     def write_log(self, msg: str, strategy: CtaTemplate = None):
         """

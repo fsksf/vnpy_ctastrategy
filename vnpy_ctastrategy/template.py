@@ -500,9 +500,10 @@ class CtaTemplate(ABC):
             }
         }
         """
-        url = f'http://{SETTINGS["signal.host"]}/signal/factor/pos'
+        url = f'http://{SETTINGS["signal.host"]}/api/signal/factor/pos'
         try:
-            data = get_from_url(url=url)
+            data = get_from_url(url=url,
+                                headers={'Api-Token': SETTINGS['signal.token']})
         except:
             self.write_log(f'无法链接到 {url}')
             return
