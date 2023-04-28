@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 """
-@FileName  :etf_cta_strategy.py
+@FileName  :etf_cta_strategy_shengou.py
 @Time      :2022/10/27 10:44
 @Author    :fsksf
 """

@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict
 from cachetools import TTLCache, cachedmethod, cached
 from vnpy import WORK_DIR
 from vnpy.trader.setting import SETTINGS
-from vnpy.trader.constant import Interval, Direction, Offset
+from vnpy.trader.constant import Interval, Direction, Offset, OrderType
 from vnpy.trader.object import BarData, TickData, OrderData, TradeData, ReportStrategy
 from vnpy.trader.utility import virtual
 from vnpy.trader.utils import get_from_url
@@ -277,7 +277,8 @@ class CtaTemplate(ABC):
         stop: bool = False,
         lock: bool = False,
         net: bool = False,
-        vt_symbol: str = None
+        vt_symbol: str = None,
+        type: OrderType = OrderType.LIMIT
     ):
         """
         Send a new order.
@@ -294,7 +295,8 @@ class CtaTemplate(ABC):
                                                      lock=lock,
                                                      net=net,
                                                      signal_price=signal_price,
-                                                     vt_symbol=vt_symbol)
+                                                     vt_symbol=vt_symbol,
+                                                     type=type)
             self.active_orderids.update(vt_orderids)
             return vt_orderids
         else:
@@ -463,8 +465,9 @@ class CtaTemplate(ABC):
     def get_spread(self, spread_name):
         return self.cta_engine.main_engine.get_spread(spread_name)
 
-    @cached(cache=TTLCache(maxsize=10, ttl=0.5))
-    def _get_pos_factor(self):
+    @staticmethod
+    @cached(cache=TTLCache(maxsize=1, ttl=2))
+    def _get_pos_factor():
         """
         获取仓位因子
         :return: {
@@ -505,10 +508,10 @@ class CtaTemplate(ABC):
             data = get_from_url(url=url,
                                 headers={'Api-Token': SETTINGS['signal.token']})
         except:
-            self.write_log(f'无法链接到 {url}')
-            return
+            print(f'无法链接到 {url}')
+            return {}
         if data is None:
-            return None
+            return {}
         return data['data']
 
     def get_pos_factor(self):
@@ -528,8 +531,6 @@ class CtaTemplate(ABC):
             }
         """
         data = self._get_pos_factor()
-        if data is None:
-            return {}
         return data.get('posFactors')
 
     def get_spread_pos_factor(self):
@@ -569,8 +570,6 @@ class CtaTemplate(ABC):
             }
         """
         data = self._get_pos_factor()
-        if data is None:
-            return {}
         return data.get('spreadPosFactors')
 
     def get_report_data(self):
@@ -638,7 +637,7 @@ class TargetPosTemplate(CtaTemplate):
     last_bar = None
     target_pos = 0
     parameters = []
-    variables = ['last_order_time', 'pos', 'signal_pos', 'target_pos']
+    variables = ['last_algo_time', 'pos', 'signal_pos', 'target_pos']
 
     def __init__(self, cta_engine, strategy_name, vt_symbol, setting):
         """"""

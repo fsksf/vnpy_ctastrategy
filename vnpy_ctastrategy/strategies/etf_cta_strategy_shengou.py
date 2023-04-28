@@ -3,6 +3,8 @@
 @FileName  :etf_cta_strategy_shengou.py
 @Time      :2022/10/27 10:44
 @Author    :fsksf
+
+ETF 申购示例
 """
 from typing import Any, Callable, Dict
 from vnpy.trader.utility import ArrayManager, BarGenerator
@@ -11,9 +13,7 @@ from vnpy.trader.object import BarData, TickData, OrderData, TradeData
 from vnpy_ctastrategy.etf_template import ETFTemplate
 
 
-class ETFBSStrategyTempYiJia(ETFTemplate):
-    etf_shenshu_min_vol = 2000000
-    parameters = ['etf_shenshu_min_vol']
+class ETFBSStrategyShenGou(ETFTemplate):
 
     def __init__(
         self,
@@ -21,11 +21,8 @@ class ETFBSStrategyTempYiJia(ETFTemplate):
         strategy_name: str,
         vt_symbol: str,         # 篮子对应的ETF
         setting: dict,
-        trade_basket: bool = True
     ):
-
-        super(ETFBSStrategyTempYiJia, self).__init__(cta_engine, strategy_name, vt_symbol, setting,
-                                                     trade_basket=trade_basket)
+        super().__init__(cta_engine, strategy_name, vt_symbol, setting)
 
         self.am = ArrayManager(size=100)
         self.bg = BarGenerator(on_bar=self.on_bar)
@@ -56,11 +53,11 @@ class ETFBSStrategyTempYiJia(ETFTemplate):
         :param bar:
         :return:
         """
-        self.am.update_bar(bar)
-        if not self.am.inited:
-            return
-        if not self.trading:
-            return
+        # self.am.update_bar(bar)
+        # if not self.am.inited:
+        #     return
+        # if not self.trading:
+        #     return
         self.handle_bar(bar)
 
     def handle_bar(self, bar: BarData):
@@ -70,14 +67,19 @@ class ETFBSStrategyTempYiJia(ETFTemplate):
         :return:
         """
         self.cancel_all()
-        if self.basket_pos < 1 and self.etf_pos < self.etf_shenshu_min_vol:
-            print('买入ETF')
-            self.buy_sell_with_target(limit_price=3, target_volume=self.etf_shenshu_min_vol,
-                                      per_order_max=self.etf_shenshu_min_vol)
+        # spread = self.get_spread("IM159845-1")
+        etf_symbol = self.vt_symbol
+        dDiscount, dPremium = self.get_moment_profit(etf_symbol)
+        # print(f'cta策略中取到了 价差：{spread.name} 价格为：{spread.last_price}')
+        print(f'cta策略中取到了 {etf_symbol} 的瞬时利润： discount: {dDiscount}, premium: {dPremium}')
 
-        elif self.etf_pos >= self.etf_shenshu_min_vol:
-            print('赎回')
-            self.redemption(self.etf_shenshu_min_vol)
+        if self.basket_pos < 1 and self.etf_pos == 0:
+            print('买入篮子')
+            self.set_basket_target(1)
+
         elif self.basket_pos >= 1:
-            print('卖出股票')
-            self.set_basket_target(0)
+            print('申购')
+            self.purchase(1)
+        elif self.etf_pos >= self.pre_ss_vol:
+            print('卖出etf')
+            self.sell(limit_price=3, volume=self.pre_ss_vol)
