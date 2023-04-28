@@ -5,7 +5,7 @@ import json
 import traceback
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, List, Iterable
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
@@ -56,6 +56,7 @@ from .base import (
 )
 from .template import CtaTemplate
 from .spread_template import CtaSpreadTemplate
+from .etf_template import ETFTemplate
 
 
 STOP_STATUS_MAP = {
@@ -172,7 +173,13 @@ class CtaEngine(BaseEngine):
     def process_order_event(self, event: Event):
         """"""
         order = event.data
+        if isinstance(order, Iterable):
+            for _order in order:
+                self._on_order(_order)
+        else:
+            self._on_order(order)
 
+    def _on_order(self, order):
         self.offset_converter.update_order(order)
 
         strategy = self.orderid_strategy_map.get(order.vt_orderid, None)
@@ -206,6 +213,13 @@ class CtaEngine(BaseEngine):
     def process_trade_event(self, event: Event):
         """"""
         trade = event.data
+        if isinstance(trade, Iterable):
+            for _trade in trade:
+                self._on_trade(_trade)
+        else:
+            self._on_trade(trade)
+
+    def _on_trade(self, trade):
 
         # Filter duplicate trade push
         if trade.vt_tradeid in self.vt_tradeids:
@@ -247,6 +261,13 @@ class CtaEngine(BaseEngine):
     def process_position_event(self, event: Event):
         """"""
         position = event.data
+        if isinstance(position, Iterable):
+            for _pos in position:
+                self._on_position(_pos)
+        else:
+            self._on_position(position)
+
+    def _on_position(self, position):
 
         self.offset_converter.update_position(position)
 
@@ -431,6 +452,13 @@ class CtaEngine(BaseEngine):
             net,
             signal_price
         )
+
+    def send_order_many(self, strategy, req_list: List[OrderRequest]):
+        order_ids = self.main_engine.send_order_many(req_list)
+        for vt_o_id in order_ids:
+            self.orderid_strategy_map[vt_o_id] = strategy
+            self.strategy_orderid_map[strategy.strategy_name].add(vt_o_id)
+        return order_ids
 
     def send_local_stop_order(
         self,
@@ -699,10 +727,6 @@ class CtaEngine(BaseEngine):
             self.write_log("创建策略失败，本地代码缺失交易所后缀")
             return
 
-        # _, exchange_str = vt_symbol.split(".")
-        # if exchange_str not in Exchange.__members__:
-        #     self.write_log("创建策略失败，本地代码的交易所后缀不正确")
-        #     return
         try:
             strategy = strategy_class(self, strategy_name, vt_symbol, setting, trade_basket)
         except TypeError:
@@ -713,6 +737,13 @@ class CtaEngine(BaseEngine):
         for symbol in strategy.get_symbols():
             strategies = self.symbol_strategy_map[symbol]
             strategies.append(strategy)
+
+        if isinstance(strategy, ETFTemplate):
+            symbols = strategy.get_etf_stocks_sub_reqs()
+            try:
+                self.main_engine.subscribe_many(symbols, 'JG')
+            except Exception:
+                self.main_engine.subscribe_many(symbols, 'QMT')
 
         # Update to setting file.
         self.update_strategy_setting(strategy_name, setting)
