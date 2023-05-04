@@ -6,9 +6,8 @@
 
 对策略模板进行改造，使其支持多标的买卖、持仓，篮子，申赎
 """
-from abc import ABC
 from copy import copy
-from typing import Any, Callable, Dict
+from typing import Any
 import collections
 from vnpy_ctastrategy.template import CtaTemplate
 from vnpy.trader.constant import Interval, Direction, Offset, OrderType, Exchange
