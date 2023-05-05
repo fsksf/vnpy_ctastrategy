@@ -240,6 +240,7 @@ class CtaEngine(BaseEngine):
                                      Direction.EnSellBack):
                 strategy.pos[trade.vt_symbol] = strategy.pos[trade.vt_symbol] - trade.volume
             else:
+                print(trade.direction)
                 raise NotImplementedError()
         else:
             if trade.direction in (Direction.LONG, Direction.LoanBuy, Direction.EnBuyBack):
