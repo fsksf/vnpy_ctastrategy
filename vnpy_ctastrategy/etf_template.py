@@ -10,7 +10,7 @@ from copy import copy
 from typing import Any
 import collections
 from vnpy_ctastrategy.template import CtaTemplate
-from vnpy.trader.constant import Interval, Direction, Offset, OrderType, Exchange
+from vnpy.trader.constant import Interval, Direction, Offset, OrderType, Exchange, ProductStatus
 from vnpy.trader.object import (
     BarData, TickData, OrderData, TradeData, SubscribeRequest, OrderRequest,
     ContractData
@@ -99,12 +99,16 @@ class ETFTemplate(CtaTemplate):
             if cash_flag == 2:
                 continue
             elif cash_flag == 1:
-                tick = self.cta_engine.main_engine.get_tick(comp.vt_symbol)
+                tick: TickData = self.cta_engine.main_engine.get_tick(comp.vt_symbol)
                 if tick is None:
                     continue
-                if tick and tick.last_price == tick.limit_up or tick.last_price == tick.limit_down:
+                elif tick and tick.last_price == tick.limit_up or tick.last_price == tick.limit_down:
                     print(f'{tick.vt_symbol} 涨停或者跌停，up: {tick.limit_up}, down {tick.limit_down} '
                           f'last price {tick.last_price}')
+                    continue
+                elif tick and not tick.trade_able:
+                    # 当前不可交易
+                    print(f'{tick.vt_symbol} 暂时不可交易， 跳过，状态： {tick.status}')
                     continue
 
             comp_current_pos = self.pos[comp.vt_symbol]
