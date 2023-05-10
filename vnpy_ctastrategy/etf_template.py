@@ -9,11 +9,12 @@
 from copy import copy
 from typing import Any
 import collections
+from vnpy import WORK_DIR
 from vnpy_ctastrategy.template import CtaTemplate
 from vnpy.trader.constant import Interval, Direction, Offset, OrderType, Exchange, ProductStatus
 from vnpy.trader.object import (
     BarData, TickData, OrderData, TradeData, SubscribeRequest, OrderRequest,
-    ContractData
+    ContractData, ReportStrategy
 )
 
 
@@ -225,3 +226,19 @@ class ETFTemplate(CtaTemplate):
         data = super().get_data()
         data['trade_basket'] = self.trade_basket
         return data
+
+    def get_report_data(self):
+        return ReportStrategy(
+            name=self.strategy_name,
+            strategy_type='CTA-篮子',
+            trading=self.trading,
+            symbols={'A': self.vt_symbol},
+            positions={
+                self.vt_symbol: self.pos[self.vt_symbol],
+                'basket': self.basket_pos,
+                'all': self.all_pos
+            },
+            targets={},
+            statue='success',
+            client=WORK_DIR,
+        ).pformat()

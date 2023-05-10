@@ -582,7 +582,7 @@ class CtaTemplate(ABC):
             targets={},
             statue='success',
             client=WORK_DIR,
-        ).__dict__
+        ).pformat()
 
 
 class CtaSignal(ABC):
