@@ -204,6 +204,11 @@ class ETFTemplate(CtaTemplate):
                     type=OrderType.BestOrLimit)
                 )
             elif v < 0:
+                real_pos = self.pos.get(k, 0)
+                if abs(v) < real_pos:
+                    v = real_pos
+                if v == 0:
+                    continue
                 order_requests.append(OrderRequest(
                     direction=Direction.SHORT,
                     offset=Offset.CLOSE,
