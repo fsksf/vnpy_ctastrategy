@@ -454,7 +454,11 @@ class CtaEngine(BaseEngine):
             signal_price
         )
 
-    def send_order_many(self, strategy, req_list: List[OrderRequest]):
+    def send_order_many(self, strategy: CtaTemplate, req_list: List[OrderRequest]):
+
+        if not strategy.trading:
+            return []
+
         order_ids = self.main_engine.send_order_many(req_list)
         for vt_o_id in order_ids:
             self.orderid_strategy_map[vt_o_id] = strategy
